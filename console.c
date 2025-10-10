@@ -284,6 +284,34 @@ consoleintr(int (*getc)(void))
       }
       break;
 
+    case C('D'):  // Ctrl+D: move cursor to start of next word (or EOF if line empty)
+      if (input.e == input.w) {
+        input.w = input.e;
+        wakeup(&input.r);
+      } else {
+        int len = input.e - input.w;  
+        int pos = input.pos;           
+        int i = pos;
+        while (i < len) {
+          char ch = input.buf[(input.w + i) % INPUT_BUF];
+          if (ch == ' ' || ch == '\t') break;
+          i++;
+        }
+        while (i < len) {
+          char ch = input.buf[(input.w + i) % INPUT_BUF];
+          if (ch != ' ' && ch != '\t') break;
+          i++;
+        }
+        if (i != pos) {
+          int delta = i - pos;   
+          input.pos = i;
+          int hw = get_hwcurs();
+          set_hwcurs(hw + delta);
+        }
+      }
+      break;
+
+
     default:
       if(c != 0 && input.e - input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
