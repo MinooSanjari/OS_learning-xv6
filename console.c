@@ -239,16 +239,29 @@ consoleintr(int (*getc)(void))
       }
       input.pos = input.e - input.w;
       break;
+
     case C('H'): case '\x7f':  // Backspace
-      if(input.e != input.w && input.pos > 0){
-        // Simple backspace - only allow at end of line for now
-        if(input.pos == (input.e - input.w)) {
-          input.e--;
-          input.pos--;
-          consputc(BACKSPACE);
+      if(input.pos > 0){
+        int len = input.e - input.w;   
+        int pos = input.pos;          
+        int hw = get_hwcurs();        
+        int start_hw = hw - 1;         
+        int i;
+        for(i = pos - 1; i < len - 1; i++){
+          input.buf[(input.w + i) % INPUT_BUF] = input.buf[(input.w + i + 1) % INPUT_BUF];
         }
+        input.e--;      
+        input.pos--;   
+        if(start_hw < 0) start_hw = 0;
+        set_hwcurs(start_hw);
+        for(i = pos - 1; i < (input.e - input.w); i++){
+          consputc(input.buf[(input.w + i) % INPUT_BUF]);
+        }
+        consputc(' ');
+        set_hwcurs(start_hw);
       }
       break;
+
   
     case KEY_LF:  // Left arrow
       if(input.pos > 0){
@@ -272,25 +285,38 @@ consoleintr(int (*getc)(void))
       break;
 
     default:
-      if(c != 0 && input.e-input.r < INPUT_BUF){
-        if(input.pos < (input.e - input.w)) {
-          c = (c == '\r') ? '\n' : c;
-          input.buf[input.e++ % INPUT_BUF] = c;
-          input.pos = input.e - input.w; // Move cursor to end
-          consputc(c);
+      if(c != 0 && input.e - input.r < INPUT_BUF){
+        c = (c == '\r') ? '\n' : c;
+        int len = input.e - input.w;   
+        int pos = input.pos;           
+        if(pos < len){
+          int i;
+          for(i = len; i > pos; i--){
+            input.buf[(input.w + i) % INPUT_BUF] = input.buf[(input.w + i - 1) % INPUT_BUF];
+          }
+          input.buf[(input.w + pos) % INPUT_BUF] = c;
+          input.e++;   
+          input.pos++;   
+          int hw = get_hwcurs();
+          int newlen = input.e - input.w;
+          int j;
+          for(j = pos; j < newlen; j++){
+            consputc(input.buf[(input.w + j) % INPUT_BUF]);
+          }
+          set_hwcurs(hw + 1);
         } else {
-          c = (c == '\r') ? '\n' : c;
+          // --- append at end (simple case) ---
           input.buf[input.e++ % INPUT_BUF] = c;
           input.pos++;
           consputc(c);
         }
-        
-        if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
+        if(c == '\n' || c == C('D') || input.e == input.r + INPUT_BUF){
           input.w = input.e;
           wakeup(&input.r);
         }
       }
       break;
+
     }
   }
   release(&cons.lock);
