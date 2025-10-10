@@ -284,7 +284,7 @@ consoleintr(int (*getc)(void))
       }
       break;
 
-    case C('D'):  // Ctrl+D: move cursor to start of next word (or EOF if line empty)
+    case C('D'):  // Ctrl+D
       if (input.e == input.w) {
         input.w = input.e;
         wakeup(&input.r);
@@ -305,6 +305,32 @@ consoleintr(int (*getc)(void))
         if (i != pos) {
           int delta = i - pos;   
           input.pos = i;
+          int hw = get_hwcurs();
+          set_hwcurs(hw + delta);
+        }
+      }
+      break;
+
+    case C('A'):  // Ctrl+A
+      if (input.e != input.w) {
+        int pos = input.pos;
+        int i = pos;
+        while (i > 0) {
+          char ch = input.buf[(input.w + i - 1) % INPUT_BUF];
+          if (ch != ' ' && ch != '\t')
+            break;
+          i--;
+        }
+        while (i > 0) {
+          char ch = input.buf[(input.w + i - 1) % INPUT_BUF];
+          if (ch == ' ' || ch == '\t')
+            break;
+          i--;
+        }
+        if (i != pos) {
+          int delta = i - pos;  
+          input.pos = i;
+
           int hw = get_hwcurs();
           set_hwcurs(hw + delta);
         }
