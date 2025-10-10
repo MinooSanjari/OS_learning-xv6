@@ -137,6 +137,28 @@ panic(char *s)
 #define CRTPORT 0x3d4
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
+// helper
+static int
+get_hwcurs(void)
+{
+  int pos;
+  outb(CRTPORT, 14);
+  pos = inb(CRTPORT+1) << 8;
+  outb(CRTPORT, 15);
+  pos |= inb(CRTPORT+1);
+  return pos;
+}
+
+static void
+set_hwcurs(int pos)
+{
+  outb(CRTPORT, 14);
+  outb(CRTPORT+1, pos >> 8);
+  outb(CRTPORT, 15);
+  outb(CRTPORT+1, pos & 0xff);
+}
+
+
 static void
 cgaputc(int c)
 {
@@ -207,7 +229,6 @@ consoleintr(int (*getc)(void))
   while((c = getc()) >= 0){
     switch(c){
     case C('P'):  // Process listing.
-      // procdump() locks cons.lock indirectly; invoke later
       doprocdump = 1;
       break;
     case C('U'):  // Kill line.
@@ -216,36 +237,54 @@ consoleintr(int (*getc)(void))
         input.e--;
         consputc(BACKSPACE);
       }
+      input.pos = input.e - input.w;
       break;
     case C('H'): case '\x7f':  // Backspace
-      if(input.e != input.w){
-        input.e--;
-        consputc(BACKSPACE);
+      if(input.e != input.w && input.pos > 0){
+        // Simple backspace - only allow at end of line for now
+        if(input.pos == (input.e - input.w)) {
+          input.e--;
+          input.pos--;
+          consputc(BACKSPACE);
+        }
       }
       break;
-
+  
     case KEY_LF:  // Left arrow
-      uartputc('L');
-      if(input.pos > input.w){   // if not at beginning
+      if(input.pos > 0){
         input.pos--;
-        consputc('\b');          // move cursor left visually
+        {
+          int hw = get_hwcurs();
+          if(hw > 0)
+            set_hwcurs(hw - 1);
+        }
       }
       break;
 
-    case KEY_RT:  // Right arrow
-      uartputc('R');
-      if(input.pos < input.e){   // if not beyond end
-        consputc(input.buf[input.pos]);  // reprint char under cursor
+    case KEY_RT:  // Right arrow  
+      if(input.pos < (input.e - input.w)){
+        {
+          int hw = get_hwcurs();
+          set_hwcurs(hw + 1);
+        }
         input.pos++;
       }
       break;
 
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF){
-        c = (c == '\r') ? '\n' : c;
-        input.buf[input.e++ % INPUT_BUF] = c;
-        input.e = input.pos;
-        consputc(c);
+        if(input.pos < (input.e - input.w)) {
+          c = (c == '\r') ? '\n' : c;
+          input.buf[input.e++ % INPUT_BUF] = c;
+          input.pos = input.e - input.w; // Move cursor to end
+          consputc(c);
+        } else {
+          c = (c == '\r') ? '\n' : c;
+          input.buf[input.e++ % INPUT_BUF] = c;
+          input.pos++;
+          consputc(c);
+        }
+        
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
           input.w = input.e;
           wakeup(&input.r);
@@ -256,7 +295,7 @@ consoleintr(int (*getc)(void))
   }
   release(&cons.lock);
   if(doprocdump) {
-    procdump();  // now call procdump() wo. cons.lock held
+    procdump();
   }
 }
 
@@ -281,8 +320,6 @@ consoleread(struct inode *ip, char *dst, int n)
     c = input.buf[input.r++ % INPUT_BUF];
     if(c == C('D')){  // EOF
       if(n < target){
-        // Save ^D for next time, to make sure
-        // caller gets a 0-byte result.
         input.r--;
       }
       break;
@@ -292,6 +329,10 @@ consoleread(struct inode *ip, char *dst, int n)
     if(c == '\n')
       break;
   }
+  
+  // Reset cursor position after reading a line
+  input.pos = 0;
+  
   release(&cons.lock);
   ilock(ip);
 
@@ -320,7 +361,8 @@ consoleinit(void)
 
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
-  cons.locking = 1;
+  cons.locking = 1;\
+  input.pos = 0;
 
   ioapicenable(IRQ_KBD, 0);
 }
