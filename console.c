@@ -210,12 +210,20 @@ consputc(int c)
 }
 
 #define INPUT_BUF 128
+
+struct hist{
+  char c;
+  int pos;
+};
+
 struct {
   char buf[INPUT_BUF];
   uint r;  // Read index
   uint w;  // Write index
   uint e;  // Edit index
   uint pos;
+  struct hist history[INPUT_BUF];
+  int hist_top;
 } input;
 
 #define C(x)  ((x)-'@')  // Control-x
