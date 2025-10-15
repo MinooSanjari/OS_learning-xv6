@@ -224,7 +224,7 @@ struct {
   uint pos;
   struct hist history[INPUT_BUF];
   int hist_top;
-} input;
+} input , c_input;
 
 #define C(x)  ((x)-'@')  // Control-x
 
@@ -344,6 +344,48 @@ consoleintr(int (*getc)(void))
         }
       }
       break;
+      
+
+     case C('Z'):  // Ctrl+Z 
+      if (input.hist_top > 0) {
+        int len = input.e - input.w;
+        int current_pos = input.pos;
+        
+        struct hist char_to_remove = input.history[--input.hist_top];
+        int pos_to_remove = char_to_remove.pos;
+
+        for (int j = pos_to_remove; j < len - 1; j++) {
+          input.buf[(input.w + j) % INPUT_BUF] = input.buf[(input.w + j + 1) % INPUT_BUF];
+        }
+        input.e--;
+
+        for (int i = 0; i < input.hist_top; i++) {
+          if (input.history[i].pos > pos_to_remove)
+            input.history[i].pos--;
+        }
+
+        int hw = get_hwcurs();
+        int start_pos = hw - current_pos;
+        
+        set_hwcurs(start_pos);
+        for (int i = 0; i < len; i++) {
+          consputc(' ');
+        }
+
+        set_hwcurs(start_pos);
+        int new_len = input.e - input.w;
+        for (int k = 0; k < new_len; k++) {
+          consputc(input.buf[(input.w + k) % INPUT_BUF]);
+        }
+        
+        if (current_pos > pos_to_remove) {
+          input.pos = current_pos - 1;
+        } else {
+          input.pos = current_pos;
+        }
+        set_hwcurs(start_pos + input.pos);
+      }
+      break;
 
 
     default:
@@ -358,7 +400,17 @@ consoleintr(int (*getc)(void))
           }
           input.buf[(input.w + pos) % INPUT_BUF] = c;
           input.e++;   
-          input.pos++;   
+          input.pos++; 
+          if (input.hist_top < INPUT_BUF) {
+            input.history[input.hist_top].c = c;
+            input.history[input.hist_top].pos = input.pos - 1;
+            input.hist_top++;
+          }
+
+          for (int h = 0; h < input.hist_top - 1; h++) {
+            if (input.history[h].pos >= pos)
+              input.history[h].pos++;
+          }  
           int hw = get_hwcurs();
           int newlen = input.e - input.w;
           int j;
@@ -371,6 +423,11 @@ consoleintr(int (*getc)(void))
           input.buf[input.e++ % INPUT_BUF] = c;
           input.pos++;
           consputc(c);
+          if (input.hist_top < INPUT_BUF) {
+            input.history[input.hist_top].c = c;
+            input.history[input.hist_top].pos = input.pos - 1;
+            input.hist_top++;
+          }
         }
         if(c == '\n' || c == C('D') || input.e == input.r + INPUT_BUF){
           input.w = input.e;
@@ -454,4 +511,3 @@ consoleinit(void)
 
   ioapicenable(IRQ_KBD, 0);
 }
-
