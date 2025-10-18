@@ -27,12 +27,6 @@ main(void)
   ioapicinit();    // another interrupt controller
   consoleinit();   // console hardware
   uartinit();      // serial port
-
-  cprintf("\n=============================\n");
-  cprintf("Group Members:\n");
-  cprintf("Faezeh\nMohammad\nMinoo\n");
-  cprintf("=============================\n\n");
-
   pinit();         // process table
   tvinit();        // trap vectors
   binit();         // buffer cache
@@ -58,7 +52,12 @@ mpenter(void)
 static void
 mpmain(void)
 {
+
   cprintf("cpu%d: starting %d\n", cpuid(), cpuid());
+  
+  cprintf("Group Members:\n");
+  cprintf("Faezeh Misaghi\nMohammad Khoshroo\nMinoo Sanjari\n");
+
   idtinit();       // load idt register
   xchg(&(mycpu()->started), 1); // tell startothers() we're up
   scheduler();     // start running processes
