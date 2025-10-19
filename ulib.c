@@ -60,7 +60,7 @@ gets(char *buf, int max)
     if(cc < 1)
       break;
     buf[i++] = c;
-    if(c == '\n' || c == '\r')
+    if(c == '\n' || c == '\r' || c == '\t')
       break;
   }
   buf[i] = '\0';
@@ -103,4 +103,15 @@ memmove(void *vdst, const void *vsrc, int n)
   while(n-- > 0)
     *dst++ = *src++;
   return vdst;
+}
+
+
+int
+strncmp(const char *p, const char *q, uint n)
+{
+  while(n > 0 && *p && *p == *q)
+    n--, p++, q++;
+  if(n == 0)
+    return 0;
+  return (uchar)*p - (uchar)*q;
 }

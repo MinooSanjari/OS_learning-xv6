@@ -15,23 +15,34 @@
 #include "proc.h"
 #include "x86.h"
 
-// Arrow key codes 
+// Arrow key codes
 #define KEY_HOME 0xE0
-#define KEY_END  0xE1
-#define KEY_UP   0xE2
-#define KEY_DN   0xE3
-#define KEY_LF   0xE4  // Left arrow
-#define KEY_RT   0xE5  // Right arrow
+#define KEY_END 0xE1
+#define KEY_UP 0xE2
+#define KEY_DN 0xE3
+#define KEY_LF 0xE4 // Left arrow
+#define KEY_RT 0xE5 // Right arrow
 
+#define KEY_TAB 0x09
+#define R_TAB_DEFAULT -20
 
 static void consputc(int);
 
 static int panicked = 0;
 
-static struct {
+static struct
+{
   struct spinlock lock;
   int locking;
 } cons;
+
+int my_strlen_con(const char *s)
+{
+  int n = 0;
+  while (s[n])
+    n++;
+  return n;
+}
 
 static void
 printint(int xx, int base, int sign)
@@ -41,49 +52,52 @@ printint(int xx, int base, int sign)
   int i;
   uint x;
 
-  if(sign && (sign = xx < 0))
+  if (sign && (sign = xx < 0))
     x = -xx;
   else
     x = xx;
 
   i = 0;
-  do{
+  do
+  {
     buf[i++] = digits[x % base];
-  }while((x /= base) != 0);
+  } while ((x /= base) != 0);
 
-  if(sign)
+  if (sign)
     buf[i++] = '-';
 
-  while(--i >= 0)
+  while (--i >= 0)
     consputc(buf[i]);
 }
-//PAGEBREAK: 50
+// PAGEBREAK: 50
 
 // Print to the console. only understands %d, %x, %p, %s.
-void
-cprintf(char *fmt, ...)
+void cprintf(char *fmt, ...)
 {
   int i, c, locking;
   uint *argp;
   char *s;
 
-  locking = cons.locking;
-  if(locking)
-    acquire(&cons.lock);
+  // locking = cons.locking;
+  // if (locking)
+  //   acquire(&cons.lock);
 
   if (fmt == 0)
     panic("null fmt");
 
-  argp = (uint*)(void*)(&fmt + 1);
-  for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
-    if(c != '%'){
+  argp = (uint *)(void *)(&fmt + 1);
+  for (i = 0; (c = fmt[i] & 0xff) != 0; i++)
+  {
+    if (c != '%')
+    {
       consputc(c);
       continue;
     }
     c = fmt[++i] & 0xff;
-    if(c == 0)
+    if (c == 0)
       break;
-    switch(c){
+    switch (c)
+    {
     case 'd':
       printint(*argp++, 10, 1);
       break;
@@ -92,9 +106,9 @@ cprintf(char *fmt, ...)
       printint(*argp++, 16, 0);
       break;
     case 's':
-      if((s = (char*)*argp++) == 0)
+      if ((s = (char *)*argp++) == 0)
         s = "(null)";
-      for(; *s; s++)
+      for (; *s; s++)
         consputc(*s);
       break;
     case '%':
@@ -108,12 +122,11 @@ cprintf(char *fmt, ...)
     }
   }
 
-  if(locking)
-    release(&cons.lock);
+  // if (locking)
+  //   release(&cons.lock);
 }
 
-void
-panic(char *s)
+void panic(char *s)
 {
   int i;
   uint pcs[10];
@@ -125,17 +138,17 @@ panic(char *s)
   cprintf(s);
   cprintf("\n");
   getcallerpcs(&s, pcs);
-  for(i=0; i<10; i++)
+  for (i = 0; i < 10; i++)
     cprintf(" %p", pcs[i]);
   panicked = 1; // freeze other CPU
-  for(;;)
+  for (;;)
     ;
 }
 
-//PAGEBREAK: 50
+// PAGEBREAK: 50
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
-static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
+static ushort *crt = (ushort *)P2V(0xb8000); // CGA memory
 
 // helper
 static int
@@ -143,9 +156,9 @@ get_hwcurs(void)
 {
   int pos;
   outb(CRTPORT, 14);
-  pos = inb(CRTPORT+1) << 8;
+  pos = inb(CRTPORT + 1) << 8;
   outb(CRTPORT, 15);
-  pos |= inb(CRTPORT+1);
+  pos |= inb(CRTPORT + 1);
   return pos;
 }
 
@@ -153,11 +166,10 @@ static void
 set_hwcurs(int pos)
 {
   outb(CRTPORT, 14);
-  outb(CRTPORT+1, pos >> 8);
+  outb(CRTPORT + 1, pos >> 8);
   outb(CRTPORT, 15);
-  outb(CRTPORT+1, pos & 0xff);
-}
-
+  outb(CRTPORT + 1, pos & 0xff);
+};
 
 static void
 cgaputc(int c)
@@ -166,235 +178,265 @@ cgaputc(int c)
 
   // Cursor position: col + 80*row.
   outb(CRTPORT, 14);
-  pos = inb(CRTPORT+1) << 8;
+  pos = inb(CRTPORT + 1) << 8;
   outb(CRTPORT, 15);
-  pos |= inb(CRTPORT+1);
+  pos |= inb(CRTPORT + 1);
 
-  if(c == '\n')
-    pos += 80 - pos%80;
-  else if(c == BACKSPACE){
-    if(pos > 0) --pos;
-  } else
-    crt[pos++] = (c&0xff) | 0x0700;  // black on white
+  if (c == '\n')
+    pos += 80 - pos % 80;
+  else if (c == BACKSPACE)
+  {
+    if (pos > 0)
+      --pos;
+  }
+  else
+    crt[pos++] = (c & 0xff) | 0x0700; // black on white
 
-  if(pos < 0 || pos > 25*80)
+  if (pos < 0 || pos > 25 * 80)
     panic("pos under/overflow");
 
-  if((pos/80) >= 24){  // Scroll up.
-    memmove(crt, crt+80, sizeof(crt[0])*23*80);
+  if ((pos / 80) >= 24)
+  { // Scroll up.
+    memmove(crt, crt + 80, sizeof(crt[0]) * 23 * 80);
     pos -= 80;
-    memset(crt+pos, 0, sizeof(crt[0])*(24*80 - pos));
+    memset(crt + pos, 0, sizeof(crt[0]) * (24 * 80 - pos));
   }
 
   outb(CRTPORT, 14);
-  outb(CRTPORT+1, pos>>8);
+  outb(CRTPORT + 1, pos >> 8);
   outb(CRTPORT, 15);
-  outb(CRTPORT+1, pos);
+  outb(CRTPORT + 1, pos);
   crt[pos] = ' ' | 0x0700;
 }
 
-void
-consputc(int c)
+void consputc(int c)
 {
-  if(panicked){
+  if (panicked)
+  {
     cli();
-    for(;;)
+    for (;;)
       ;
   }
 
-  if(c == BACKSPACE){
-    uartputc('\b'); uartputc(' '); uartputc('\b');
-  } else
+  if (c == BACKSPACE)
+  {
+    uartputc('\b');
+    uartputc(' ');
+    uartputc('\b');
+  }
+  else
     uartputc(c);
   cgaputc(c);
 }
 
 #define INPUT_BUF 128
 
-struct hist{
+struct hist
+{
   char c;
   int pos;
 };
 
-struct {
+struct
+{
   char buf[INPUT_BUF];
-  uint r;  // Read index
-  uint w;  // Write index
-  uint e;  // Edit index
+  uint r;    // Read index
+  uint w;    // Write index
+  uint e;    // Edit index
+  int r_tab; // Tab read index
   uint pos;
   struct hist history[INPUT_BUF];
   int hist_top;
-} input , c_input;
+} input, c_input;
 
 int select_start;
 int select_end;
 int selecting = 0;
 int select_num;
-int selected = 0; 
+int selected = 0;
 
+void highlight_text(int select_start, int select_end)
+{
+  int start = select_start;
+  int end = select_end;
 
-void highlight_text(int select_start, int select_end) {
-    int start = select_start;
-    int end = select_end;
-    
-    if (start > end) {
-        int temp = start;
-        start = end;
-        end = temp;
-    }
-    ushort highlight_attr = 0x70;  
-    
-    for (int pos = start; pos <= end; pos++) {
-        ushort ch = crt[pos] & 0x00FF;     
-        crt[pos] = ch | (highlight_attr << 8);  
-    }
+  if (start > end)
+  {
+    int temp = start;
+    start = end;
+    end = temp;
+  }
+  ushort highlight_attr = 0x70;
+
+  for (int pos = start; pos <= end; pos++)
+  {
+    ushort ch = crt[pos] & 0x00FF;
+    crt[pos] = ch | (highlight_attr << 8);
+  }
 }
 
-void reset_highlight(int select_start, int select_end) {
-    selected = 0 ;
-    int start = select_start;
-    int end = select_end;
-    if (start > end) {
-        int temp = start;
-        start = end;
-        end = temp;
-    }
-    ushort normal_attr = 0x07;  
-    for (int pos = start; pos <= end; pos++) {
-        ushort ch = crt[pos] & 0x00FF; 
-        crt[pos] = ch | (normal_attr << 8); 
-    }
+void reset_highlight(int select_start, int select_end)
+{
+  selected = 0;
+  int start = select_start;
+  int end = select_end;
+  if (start > end)
+  {
+    int temp = start;
+    start = end;
+    end = temp;
+  }
+  ushort normal_attr = 0x07;
+  for (int pos = start; pos <= end; pos++)
+  {
+    ushort ch = crt[pos] & 0x00FF;
+    crt[pos] = ch | (normal_attr << 8);
+  }
 }
-char copy[INPUT_BUF];  
+char copy[INPUT_BUF];
 int copy_len = 0;
 
-void delete_selected(){
+#define C(x) ((x) - '@') // Control-x
 
-  int current_hw = get_hwcurs();
-  int line_start_hw = current_hw - input.pos;
-
-  int start, end;
-  int start_hw_pos = (select_start < select_end) ? select_start : select_end;
-  int end_hw_pos = (select_start > select_end) ? select_start : select_end;
-
-  start = start_hw_pos - line_start_hw;
-  end = (end_hw_pos - line_start_hw);
-
-  if (start < 0) start = 0;
-  if (end >= (input.e - input.w)) end = (input.e - input.w) - 1;
-
-  int delete_count = end - start + 1;
-  int len_before = input.e - input.w; 
-
-
-  reset_highlight(select_start, select_end);
-
-  for (int j = start; j < len_before - delete_count; j++) {
-    input.buf[(input.w + j) % INPUT_BUF] = input.buf[(input.w + j + delete_count) % INPUT_BUF];
-  }
-  input.e -= delete_count;
-  int len_after = input.e - input.w;
-
-  for (int i = 0; i < input.hist_top; ) {
-    if (input.history[i].pos >= start && input.history[i].pos <= end) {
-  for (int j = i; j < input.hist_top - 1; j++) {
-    input.history[j] = input.history[j + 1];
-  }
-  input.hist_top--;
-    } else if (input.history[i].pos > end) {
-  input.history[i].pos -= delete_count;
-  i++;
-    } else {
-  i++;
-    }
-  }
-
-  set_hwcurs(line_start_hw + start);
-  for (int k = start; k < len_after; k++) {
-      consputc(input.buf[(input.w + k) % INPUT_BUF]);
-  }
-  for (int i = 0; i < delete_count; i++) {
-    consputc(' ');
-  }
-
-  input.pos = start;
-  set_hwcurs(line_start_hw + input.pos);
-
-  selected = 0;
-  selecting = 0;
-  select_num = 0;
-}
-
-
-#define C(x)  ((x)-'@')  // Control-x
-
-void
-consoleintr(int (*getc)(void))
+void consoleintr(int (*getc)(void))
 {
   int c, doprocdump = 0;
   acquire(&cons.lock);
 
-  while((c = getc()) >= 0){
-    switch(c){
-    case C('P'):  // Process listing.
+  while ((c = getc()) >= 0)
+  {
+    switch (c)
+    {
+    case C(KEY_TAB):
+
+      break;
+    case C('P'): // Process listing.
       doprocdump = 1;
       break;
-    case C('U'):  // Kill line.
-      while(input.e != input.w &&
-            input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+    case C('U'): // Kill line.
+      while (input.e != input.w &&
+             input.buf[(input.e - 1) % INPUT_BUF] != '\n')
+      {
         input.e--;
         consputc(BACKSPACE);
       }
       input.pos = input.e - input.w;
       break;
 
+    case C('H'):
+    case '\x7f': // Backspace
+      if (selected)
+      {
+        reset_highlight(select_start, select_end);
 
-    case C('H'):// Backspace
-      if(selected) {
-        delete_selected();
-      }
-      else if(input.pos > 0){
-          int len = input.e - input.w;  
-          int pos = input.pos;     
-          int hw = get_hwcurs();  
-          int start_hw = hw - 1;      
-          int i;
-          for(i = pos - 1; i < len - 1; i++){
-          input.buf[(input.w + i) % INPUT_BUF] = input.buf[(input.w + i + 1) % INPUT_BUF];
+        int start = select_start;
+        int end = select_end;
+        if (start > end)
+        {
+          int temp = start;
+          start = end;
+          end = temp;
+        }
+
+        int delete_count = end - start + 1;
+        int len = input.e - input.w;
+
+        int buffer_pos = start;
+
+        for (int i = buffer_pos; i < len - delete_count; i++)
+        {
+          input.buf[(input.w + i) % INPUT_BUF] = input.buf[(input.w + i + delete_count) % INPUT_BUF];
+        }
+
+        input.e -= delete_count;
+        input.pos = buffer_pos;
+
+        for (int i = 0; i < input.hist_top; i++)
+        {
+          if (input.history[i].pos >= buffer_pos && input.history[i].pos < buffer_pos + delete_count)
+          {
+            for (int j = i; j < input.hist_top - 1; j++)
+            {
+              input.history[j] = input.history[j + 1];
+            }
+            input.hist_top--;
+            i--;
           }
-          input.e--; 
-          input.pos--; 
-          if(start_hw < 0) start_hw = 0;
-          set_hwcurs(start_hw);
-          for(i = pos - 1; i < (input.e - input.w); i++){
-            consputc(input.buf[(input.w + i) % INPUT_BUF]);
+          else if (input.history[i].pos >= buffer_pos + delete_count)
+          {
+            input.history[i].pos -= delete_count;
           }
+        }
+
+        selected = 0;
+        selecting = 0;
+        select_num = 0;
+
+        set_hwcurs(start);
+
+        for (int i = 0; i < delete_count; i++)
+        {
           consputc(' ');
-          set_hwcurs(start_hw);
+        }
+
+        set_hwcurs(start);
+        for (int i = buffer_pos; i < (input.e - input.w); i++)
+        {
+          consputc(input.buf[(input.w + i) % INPUT_BUF]);
+        }
+
+        set_hwcurs(start);
+      }
+      else if (input.pos > 0)
+      {
+        int len = input.e - input.w;
+        int pos = input.pos;
+        int hw = get_hwcurs();
+        int start_hw = hw - 1;
+        int i;
+        for (i = pos - 1; i < len - 1; i++)
+        {
+          input.buf[(input.w + i) % INPUT_BUF] = input.buf[(input.w + i + 1) % INPUT_BUF];
+        }
+        input.e--;
+        input.pos--;
+        if (start_hw < 0)
+          start_hw = 0;
+        set_hwcurs(start_hw);
+        for (i = pos - 1; i < (input.e - input.w); i++)
+        {
+          consputc(input.buf[(input.w + i) % INPUT_BUF]);
+        }
+        consputc(' ');
+        set_hwcurs(start_hw);
       }
       break;
-  
-    case KEY_LF:  // Left arrow
-      if(selected){
+
+    case KEY_LF: // Left arrow
+      if (selected)
+      {
         reset_highlight(select_start, select_end);
         select_num = 0;
       }
-      else if(input.pos > 0){
+      else if (input.pos > 0)
+      {
         input.pos--;
         {
           int hw = get_hwcurs();
-          if(hw > 0)
+          if (hw > 0)
             set_hwcurs(hw - 1);
         }
       }
       break;
 
-    case KEY_RT:  // Right arrow  
-      if(selected){
+    case KEY_RT: // Right arrow
+      if (selected)
+      {
         reset_highlight(select_start, select_end);
         select_num = 0;
       }
-      else if(input.pos < (input.e - input.w)){
+      else if (input.pos < (input.e - input.w))
+      {
         {
           int hw = get_hwcurs();
           set_hwcurs(hw + 1);
@@ -403,30 +445,39 @@ consoleintr(int (*getc)(void))
       }
       break;
 
-    case C('D'):  // Ctrl+D
-      if(selected){
+    case C('D'): // Ctrl+D
+      if (selected)
+      {
         reset_highlight(select_start, select_end);
         select_num = 0;
       }
-      else if (input.e == input.w) {
+      else if (input.e == input.w)
+      {
         input.w = input.e;
         wakeup(&input.r);
-      } else {
-        int len = input.e - input.w;  
-        int pos = input.pos;           
+      }
+      else
+      {
+        int len = input.e - input.w;
+        int pos = input.pos;
         int i = pos;
-        while (i < len) {
+        while (i < len)
+        {
           char ch = input.buf[(input.w + i) % INPUT_BUF];
-          if (ch == ' ' || ch == '\t') break;
+          if (ch == ' ' || ch == '\t')
+            break;
           i++;
         }
-        while (i < len) {
+        while (i < len)
+        {
           char ch = input.buf[(input.w + i) % INPUT_BUF];
-          if (ch != ' ' && ch != '\t') break;
+          if (ch != ' ' && ch != '\t')
+            break;
           i++;
         }
-        if (i != pos) {
-          int delta = i - pos;   
+        if (i != pos)
+        {
+          int delta = i - pos;
           input.pos = i;
           int hw = get_hwcurs();
           set_hwcurs(hw + delta);
@@ -434,28 +485,33 @@ consoleintr(int (*getc)(void))
       }
       break;
 
-    case C('A'):  // Ctrl+A
-      if(selected){
+    case C('A'): // Ctrl+A
+      if (selected)
+      {
         reset_highlight(select_start, select_end);
         select_num = 0;
       }
-      else if (input.e != input.w) {
+      else if (input.e != input.w)
+      {
         int pos = input.pos;
         int i = pos;
-        while (i > 0) {
+        while (i > 0)
+        {
           char ch = input.buf[(input.w + i - 1) % INPUT_BUF];
           if (ch != ' ' && ch != '\t')
             break;
           i--;
         }
-        while (i > 0) {
+        while (i > 0)
+        {
           char ch = input.buf[(input.w + i - 1) % INPUT_BUF];
           if (ch == ' ' || ch == '\t')
             break;
           i--;
         }
-        if (i != pos) {
-          int delta = i - pos;  
+        if (i != pos)
+        {
+          int delta = i - pos;
           input.pos = i;
 
           int hw = get_hwcurs();
@@ -463,212 +519,217 @@ consoleintr(int (*getc)(void))
         }
       }
       break;
-      
 
-     case C('Z'):  // Ctrl+Z 
-      if(selected){
+    case C('Z'): // Ctrl+Z
+      if (selected)
+      {
         reset_highlight(select_start, select_end);
         select_num = 0;
       }
-      else if (input.hist_top > 0) {
+      else if (input.hist_top > 0)
+      {
         int len = input.e - input.w;
         int current_pos = input.pos;
-        
+
         struct hist char_to_remove = input.history[--input.hist_top];
         int pos_to_remove = char_to_remove.pos;
 
-        for (int j = pos_to_remove; j < len - 1; j++) {
+        for (int j = pos_to_remove; j < len - 1; j++)
+        {
           input.buf[(input.w + j) % INPUT_BUF] = input.buf[(input.w + j + 1) % INPUT_BUF];
         }
         input.e--;
 
-        for (int i = 0; i < input.hist_top; i++) {
+        for (int i = 0; i < input.hist_top; i++)
+        {
           if (input.history[i].pos > pos_to_remove)
             input.history[i].pos--;
         }
 
         int hw = get_hwcurs();
         int start_pos = hw - current_pos;
-        
+
         set_hwcurs(start_pos);
-        for (int i = 0; i < len; i++) {
+        for (int i = 0; i < len; i++)
+        {
           consputc(' ');
         }
 
         set_hwcurs(start_pos);
         int new_len = input.e - input.w;
-        for (int k = 0; k < new_len; k++) {
+        for (int k = 0; k < new_len; k++)
+        {
           consputc(input.buf[(input.w + k) % INPUT_BUF]);
         }
-        
-        if (current_pos > pos_to_remove) {
+
+        if (current_pos > pos_to_remove)
+        {
           input.pos = current_pos - 1;
-        } else {
+        }
+        else
+        {
           input.pos = current_pos;
         }
         set_hwcurs(start_pos + input.pos);
       }
       break;
 
-    case C('S'):  // S+Ctrl 
-      if(selected){
+    case C('S'): // S+Ctrl
+      if (selected)
+      {
         reset_highlight(select_start, select_end);
         select_num = 0;
       }
-      else{
+      else
+      {
         selected = 0;
-        select_num ++;
-        if(select_num % 2 == 1){
+        select_num++;
+        if (select_num % 2 == 1)
+        {
           selecting = 1;
           int pos_start = get_hwcurs();
           select_start = pos_start;
         }
-        else {
-          if(selecting == 1){
+        else
+        {
+          if (selecting == 1)
+          {
             selected = 1;
             selecting = 0;
             int pos_end = get_hwcurs();
             select_end = pos_end;
-            highlight_text(select_start , select_end);
+            highlight_text(select_start, select_end);
           }
         }
       }
       break;
 
-    case C('C'):  // Ctrl+C
-        if(selected == 1){
-          int current_hw = get_hwcurs();
-          int line_start_hw = current_hw - input.pos;
-           
-          int start = (select_start < select_end) ? select_start : select_end;
-          int end = (select_start > select_end) ? select_start : select_end;
-          
-          int cur_start = start - line_start_hw;
-            int cur_end = end - line_start_hw; 
-          if (cur_start < 0) cur_start = 0;
-          if (cur_end >= (input.e - input.w)) cur_end = (input.e - input.w) - 1;
-          if (cur_start > cur_end) break;
-          copy_len = 0;
-          for(int i = cur_start; i <= cur_end; i++){
-              if(copy_len < INPUT_BUF - 1){
-                  copy[copy_len++] = input.buf[(input.w + i) % INPUT_BUF];
-              }
-          }
-          copy[copy_len] = '\0';
-      } else {
-          if(selecting) {
-              selecting = 0;
-              select_num = 0;
-           }
-      }
-      break;
+      // case C('C'):  // Ctrl+C
+      //   if(selected == 1){
+      //     // Copy the selected text to copy_buffer
+      //     copy_len = 0;
+      //     int start = select_start;
+      //     int end = select_end;
 
-    case C('V'):  // Ctrl+V
-      if (copy_len > 0) {
-          if (selected) {
-              delete_selected();
-          } else {
-               if (selecting) {
-                  selecting = 0;
-                  select_num = 0;
-              }
-            }
-          for (int i = 0; i < copy_len; i++) {
-              int paste_char = copy[i];
-              if(paste_char != 0 && input.e - input.r < INPUT_BUF){
-                  paste_char = (paste_char == '\r') ? '\n' : paste_char;
-                  int len = input.e - input.w;   
-                  int pos = input.pos;           
-                    
-                  for(int j = len; j > pos; j--){
-                      input.buf[(input.w + j) % INPUT_BUF] = input.buf[(input.w + j - 1) % INPUT_BUF];
-                  }
-                    
-                  input.buf[(input.w + pos) % INPUT_BUF] = paste_char;
-                  input.e++;   
-                  input.pos++;    
-                 if (input.hist_top < INPUT_BUF) {
-                      input.history[input.hist_top].c = paste_char;
-                      input.history[input.hist_top].pos = input.pos - 1;
-                      input.hist_top++;
-                  }
-                  for (int h = 0; h < input.hist_top - 1; h++) {
-                      if (input.history[h].pos >= pos)
-                          input.history[h].pos++;
-                  }   
-                  int hw = get_hwcurs();
-                  int newlen = input.e - input.w;
-                  for(int k = pos; k < newlen; k++){
-                      consputc(input.buf[(input.w + k) % INPUT_BUF]);
-                  }
-                  set_hwcurs(hw + 1);
-                }
-            }
-        }
-        break;
+      //     if(start > end){
+      //       int temp = start;
+      //       start = end;
+      //       end = temp;
+      //     }
 
+      //     // Calculate buffer positions
+      //     int buffer_start = input.pos - (get_hwcurs() - start);
+      //     if(buffer_start < 0) buffer_start = 0;
+
+      //     // Copy from input buffer to copy_buffer
+      //     for(int i = 0; i <= (end - start); i++){
+      //       if(copy_len < INPUT_BUF - 1){
+      //         copy[copy_len++] = input.buf[(input.w + buffer_start + i) % INPUT_BUF];
+      //       }
+      //     }
+      //     copy[copy_len] = '\0'; // Null terminate
+      //     // Reset selection
+      //     reset_highlight(select_start, select_end);
+      //     selected = 0;
+      //     selecting = 0;
+      //     select_num = 0;
+      //   } else {
+      //     // If no selection, just clear selection state
+      //     if(selected){
+      //       reset_highlight(select_start, select_end);
+      //       selected = 0;
+      //       selecting = 0;
+      //       select_num = 0;
+      //     }
+      //   }
+      //   break;
+
+    case '\t':
+    {
+      input.w = input.e;
+      input.r_tab = input.r;
+      wakeup(&input.r);
+    }
+    break;
+    case C('E'):
+    {
+      cprintf("w=%d ", input.w);
+      cprintf("e=%d ", input.e);
+      cprintf("r=%d ", input.r);
+      cprintf("rt=%d ", input.r_tab);
+      cprintf("pos=%d ", input.pos);
+      cprintf("hist_top=%d\n", input.hist_top);
+    }
+    break;
 
     default:
-      if(c != 0 && input.e - input.r < INPUT_BUF){
-        if(selected == 1){
-          delete_selected();
-        }
+      if (c != 0 && input.e - input.r < INPUT_BUF)
+      {
         c = (c == '\r') ? '\n' : c;
-        int len = input.e - input.w;   
-        int pos = input.pos;           
-        if(pos < len){
+        int len = input.e - input.w;
+        int pos = input.pos;
+        if (pos < len)
+        {
           int i;
-          for(i = len; i > pos; i--){
+          for (i = len; i > pos; i--)
+          {
             input.buf[(input.w + i) % INPUT_BUF] = input.buf[(input.w + i - 1) % INPUT_BUF];
           }
           input.buf[(input.w + pos) % INPUT_BUF] = c;
-          input.e++;   
-          input.pos++; 
-          if (input.hist_top < INPUT_BUF) {
+          input.e++;
+          input.pos++;
+          if (input.hist_top < INPUT_BUF)
+          {
             input.history[input.hist_top].c = c;
             input.history[input.hist_top].pos = input.pos - 1;
             input.hist_top++;
           }
 
-          for (int h = 0; h < input.hist_top - 1; h++) {
+          for (int h = 0; h < input.hist_top - 1; h++)
+          {
             if (input.history[h].pos >= pos)
               input.history[h].pos++;
-          }  
+          }
           int hw = get_hwcurs();
           int newlen = input.e - input.w;
           int j;
-          for(j = pos; j < newlen; j++){
+          for (j = pos; j < newlen; j++)
+          {
             consputc(input.buf[(input.w + j) % INPUT_BUF]);
           }
           set_hwcurs(hw + 1);
-        } else {
+        }
+        else
+        {
           // --- append at end (simple case) ---
           input.buf[input.e++ % INPUT_BUF] = c;
           input.pos++;
           consputc(c);
-          if (input.hist_top < INPUT_BUF) {
+          if (input.hist_top < INPUT_BUF)
+          {
             input.history[input.hist_top].c = c;
             input.history[input.hist_top].pos = input.pos - 1;
             input.hist_top++;
           }
         }
-        if(c == '\n' || c == C('D') || input.e == input.r + INPUT_BUF){
+        if (c == '\n' || c == C('D') || input.e == input.r + INPUT_BUF)
+        {
           input.w = input.e;
+          input.r_tab = R_TAB_DEFAULT;
           wakeup(&input.r);
         }
       }
       break;
-
-    }
+    };
   }
   release(&cons.lock);
-  if(doprocdump) {
+  if (doprocdump)
+  {
     procdump();
   }
 }
 
-int
-consoleread(struct inode *ip, char *dst, int n)
+int consoleread(struct inode *ip, char *dst, int n)
 {
   uint target;
   int c;
@@ -676,59 +737,128 @@ consoleread(struct inode *ip, char *dst, int n)
   iunlock(ip);
   target = n;
   acquire(&cons.lock);
-  while(n > 0){
-    while(input.r == input.w){
-      if(myproc()->killed){
-        release(&cons.lock);
-        ilock(ip);
-        return -1;
+  while (n > 0)
+  {
+    if (input.r_tab == R_TAB_DEFAULT)
+    {
+      while (input.r == input.w)
+      {
+        if (myproc()->killed)
+        {
+          release(&cons.lock);
+          ilock(ip);
+          return -1;
+        }
+        sleep(&input.r, &cons.lock);
       }
-      sleep(&input.r, &cons.lock);
     }
-    c = input.buf[input.r++ % INPUT_BUF];
-    if(c == C('D')){  // EOF
-      if(n < target){
-        input.r--;
+    else
+    {
+      while (input.r_tab == (input.w + 1))
+      {
+        if (myproc()->killed)
+        {
+          release(&cons.lock);
+          ilock(ip);
+          return -1;
+        }
+        input.w = input.r;
+        input.r_tab = R_TAB_DEFAULT;
+        input.pos = input.e;
+        sleep(&input.r, &cons.lock);
       }
-      break;
     }
-    *dst++ = c;
-    --n;
-    if(c == '\n')
-      break;
+    if (input.r_tab == R_TAB_DEFAULT)
+    {
+      c = input.buf[input.r++ % INPUT_BUF];
+      if (c == C('D'))
+      { // EOF
+        if (n < target)
+        {
+          input.r--;
+        }
+        break;
+      }
+      *dst++ = c;
+      --n;
+      if (c == '\n')
+        break;
+    }
+    else
+    {
+      if (input.r_tab == input.w)
+      {
+        input.r_tab++;
+        c = '\t';
+        *dst++ = c;
+        --n;
+      }
+      else
+      {
+        c = input.buf[input.r_tab++ % INPUT_BUF];
+        *dst++ = c;
+        --n;
+      }
+    }
   }
-  
+
   input.pos = 0;
-  
+
   release(&cons.lock);
   ilock(ip);
 
   return target - n;
 }
 
-int
-consolewrite(struct inode *ip, char *buf, int n)
+int consolewrite(struct inode *ip, char *buf, int n)
 {
   int i;
 
   iunlock(ip);
   acquire(&cons.lock);
-  for(i = 0; i < n; i++)
+  // if (buf[n-1] == '\n')
+  // {
+  //   consputc('h' & 0xff);
+  //   consputc('e' & 0xff);
+  //   consputc('l' & 0xff);
+  //   consputc('l' & 0xff);
+  //   consputc('o' & 0xff);
+  //   consputc('\n' & 0xff);
+  // }
+
+  int tab_flag = 0;
+
+  // consputc(buf[my_strlen_con(buf)] & 0xff);
+  if (buf[my_strlen_con(buf)-1] == '\r')
+  {
+    tab_flag = 1;
+  }
+  
+  for (i = 0; i < n; i++)
+  {
+    if (tab_flag == 1)
+    {
+      input.buf[i] = buf[i];
+      if (buf[i] == '\r')
+        continue;
+    }
     consputc(buf[i] & 0xff);
+  }
+
   release(&cons.lock);
   ilock(ip);
 
   return n;
 }
 
-void
-consoleinit(void)
+void consoleinit(void)
 {
   initlock(&cons.lock, "console");
+  input.r_tab = R_TAB_DEFAULT;
 
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
-  cons.locking = 1;\
+  cons.locking = 1;
   input.pos = 0;
 
   ioapicenable(IRQ_KBD, 0);
